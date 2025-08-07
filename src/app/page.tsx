@@ -35,6 +35,8 @@ export default async function Home() {
     posts = [];
   }
 
+  console.log(posts);
+
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950">
       {/* Header */}

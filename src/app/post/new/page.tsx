@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -9,23 +9,58 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ArrowLeft, X, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { usePosts } from "../../../contexts/PostContext";
+import { PostService } from "@/services/post.service";
+import { supabase } from "@/supabase-client";
+
+interface User {
+  id: string;
+  name: string;
+  email: string;
+}
 
 export default function CreatePost() {
   const router = useRouter();
-  const { addPost } = usePosts();
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [users, setUsers] = useState<User[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState<string>("");
   
   const [formData, setFormData] = useState({
     title: "",
     content: "",
-    urlImage: "",
-    author: "Wesley Dev",
-    readTime: "",
-    fullContent: ""
+    url_image: "",
+    read_time: "",
+    full_content: ""
   });
+
+  // Carregar usuários ao montar o componente
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('usuarios')
+          .select('id, name, email')
+          .order('name');
+
+        if (error) throw error;
+
+        setUsers(data || []);
+        
+        // Selecionar primeiro usuário por padrão (ou Wesley Dev se existir)
+        if (data && data.length > 0) {
+          const wesleyUser = data.find(user => user.name.toLowerCase().includes('wesley'));
+          setSelectedUserId(wesleyUser?.id || data[0].id);
+        }
+      } catch (error) {
+        console.error('Erro ao carregar usuários:', error);
+        setError('Erro ao carregar usuários');
+      }
+    };
+
+    loadUsers();
+  }, []);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -56,26 +91,30 @@ export default function CreatePost() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setError(null);
 
     try {
-      // Simular delay de criação
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!selectedUserId) {
+        throw new Error('Selecione um autor');
+      }
 
-      // Adicionar o post usando o contexto
-      addPost({
+      // Criar post no Supabase
+      await PostService.createPost({
         title: formData.title,
         content: formData.content,
-        urlImage: formData.urlImage,
-        author: formData.author,
-        readTime: formData.readTime,
+        url_image: formData.url_image,
+        author: selectedUserId, // UUID do usuário selecionado
+        read_time: formData.read_time,
         tags: tags,
-        fullContent: formData.fullContent
+        full_content: formData.full_content
       });
 
-      // Redirecionar para a home
+      // Redirecionar para a home após sucesso
       router.push("/");
+      router.refresh(); // Force refresh to show new post
     } catch (error) {
       console.error("Erro ao criar post:", error);
+      setError("Erro ao criar o post. Tente novamente.");
     } finally {
       setIsLoading(false);
     }
@@ -112,6 +151,12 @@ export default function CreatePost() {
             </CardHeader>
 
             <CardContent>
+              {error && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 px-4 py-3 rounded mb-6">
+                  {error}
+                </div>
+              )}
+
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Título */}
                 <div className="space-y-2">
@@ -148,13 +193,13 @@ export default function CreatePost() {
 
                 {/* Conteúdo completo */}
                 <div className="space-y-2">
-                  <label htmlFor="fullContent" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label htmlFor="full_content" className="text-sm font-medium text-slate-900 dark:text-white">
                     Conteúdo completo (HTML) *
                   </label>
                   <Textarea
-                    id="fullContent"
-                    name="fullContent"
-                    value={formData.fullContent}
+                    id="full_content"
+                    name="full_content"
+                    value={formData.full_content}
                     onChange={handleInputChange}
                     placeholder="Digite o conteúdo completo usando HTML..."
                     rows={10}
@@ -168,14 +213,14 @@ export default function CreatePost() {
 
                 {/* URL da imagem */}
                 <div className="space-y-2">
-                  <label htmlFor="urlImage" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label htmlFor="url_image" className="text-sm font-medium text-slate-900 dark:text-white">
                     URL da imagem *
                   </label>
                   <Input
-                    id="urlImage"
-                    name="urlImage"
+                    id="url_image"
+                    name="url_image"
                     type="url"
-                    value={formData.urlImage}
+                    value={formData.url_image}
                     onChange={handleInputChange}
                     placeholder="https://images.unsplash.com/..."
                     required
@@ -189,26 +234,31 @@ export default function CreatePost() {
                     <label htmlFor="author" className="text-sm font-medium text-slate-900 dark:text-white">
                       Autor *
                     </label>
-                    <Input
+                    <select
                       id="author"
-                      name="author"
-                      value={formData.author}
-                      onChange={handleInputChange}
-                      placeholder="Seu nome"
+                      value={selectedUserId}
+                      onChange={(e) => setSelectedUserId(e.target.value)}
                       required
-                      className="border-slate-200 dark:border-slate-700"
-                    />
+                      className="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 dark:placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 dark:focus-visible:ring-slate-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="">Selecione um autor</option>
+                      {users.map((user) => (
+                        <option key={user.id} value={user.id}>
+                          {user.name} ({user.email})
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
                   {/* Tempo de leitura */}
                   <div className="space-y-2">
-                    <label htmlFor="readTime" className="text-sm font-medium text-slate-900 dark:text-white">
+                    <label htmlFor="read_time" className="text-sm font-medium text-slate-900 dark:text-white">
                       Tempo de leitura *
                     </label>
                     <Input
-                      id="readTime"
-                      name="readTime"
-                      value={formData.readTime}
+                      id="read_time"
+                      name="read_time"
+                      value={formData.read_time}
                       onChange={handleInputChange}
                       placeholder="5 min read"
                       required
@@ -275,8 +325,8 @@ export default function CreatePost() {
                   </Link>
                   <Button 
                     type="submit" 
-                    disabled={isLoading}
-                    className="bg-teal-600 hover:bg-teal-700 text-white"
+                    disabled={isLoading || !selectedUserId}
+                    className="bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50"
                   >
                     {isLoading ? (
                       <>

@@ -3,28 +3,31 @@ import { Button } from "@/components/ui/button";
 import { CalendarDays, Clock, ArrowLeft, Share } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
-import { mockPosts } from "@/app/page";
 import { notFound } from "next/navigation";
+import { PostService } from "@/services/post.service";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-// Gerar as páginas estáticas para os posts mockados
-export async function generateStaticParams() {
-  return mockPosts.map((post) => ({
-    id: post.id,
-  }));
-}
-
 export default async function PostPage({ params }: PageProps) {
   const { id } = await params;
   
-  // Encontrar o post pelo ID
-  const post = mockPosts.find(p => p.id === id);
+  let post;
   
-  // Se o post não existir, retornar 404
-  if (!post) {
+  try {
+    // Buscar o post pelo ID no Supabase
+    const supabasePost = await PostService.getPostById(id);
+    
+    console.log(supabasePost)
+    if (!supabasePost) {
+      notFound();
+    }
+    
+    // Formatar o post para o formato da aplicação
+    post = PostService.formatPostForApp(supabasePost);
+  } catch (error) {
+    console.error('Erro ao carregar post:', error);
     notFound();
   }
 
@@ -63,7 +66,7 @@ export default async function PostPage({ params }: PageProps) {
           {/* Post Header */}
           <header className="mb-8">
             <div className="flex flex-wrap gap-2 mb-6">
-              {post.tags?.map((tag) => (
+              {post.tags?.map((tag: string) => (
                 <Badge 
                   key={tag}
                   className="bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300"
@@ -83,7 +86,7 @@ export default async function PostPage({ params }: PageProps) {
                   <div className="w-8 h-8 bg-teal-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
                     {post.author?.charAt(0)}
                   </div>
-                  <span>{post.author}</span>
+                  <span>{post.usuarios.name}</span>
                 </div>
                 <div className="flex items-center gap-1">
                   <CalendarDays className="h-4 w-4" />
@@ -127,7 +130,7 @@ export default async function PostPage({ params }: PageProps) {
             <div className="flex items-center justify-between">
               <div className="flex flex-wrap gap-2">
                 <span className="text-sm text-slate-500 dark:text-slate-400">Tags:</span>
-                {post.tags?.map((tag) => (
+                {post.tags?.map((tag: string) => (
                   <Badge 
                     key={tag}
                     variant="secondary"
