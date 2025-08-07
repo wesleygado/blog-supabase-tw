@@ -1,3 +1,5 @@
+"use client";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -6,10 +8,12 @@ import {
   CardDescription,
   CardTitle,
 } from "@/components/ui/card";
-import { CalendarDays, Clock, ArrowRight, Plus } from "lucide-react";
+import { CalendarDays, Clock, ArrowRight, Plus, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { PostService } from "@/services/post.service";
+import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 
 interface FormattedPost {
   id: string;
@@ -23,19 +27,51 @@ interface FormattedPost {
   fullContent: string;
 }
 
+export default function Home() {
+  const [posts, setPosts] = useState<FormattedPost[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const router = useRouter();
 
-export default async function Home() {
-  let posts: FormattedPost[];
-  
-  try {
-    const supabasePosts = await PostService.getAllPosts();
-    posts = supabasePosts.map(PostService.formatPostForApp);
-  } catch (error) {
-    console.error('Erro ao carregar posts:', error);
-    posts = [];
+  // Carregar posts ao montar o componente
+  useEffect(() => {
+    const loadPosts = async () => {
+      try {
+        const supabasePosts = await PostService.getAllPosts();
+        const formattedPosts = supabasePosts.map(PostService.formatPostForApp);
+        setPosts(formattedPosts);
+      } catch (error) {
+        console.error('Erro ao carregar posts:', error);
+        setPosts([]);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    loadPosts();
+  }, []);
+
+  const handleDeletePost = async (postId: string, postTitle: string) => {
+    if (!confirm(`Tem certeza que deseja excluir o post "${postTitle}"?`)) {
+      return;
+    }
+
+    try {
+      await PostService.deletePost(postId);
+      // Remove o post da lista local
+      setPosts(prevPosts => prevPosts.filter(post => post.id !== postId));
+    } catch (error) {
+      console.error('Erro ao excluir post:', error);
+      alert('Erro ao excluir o post. Tente novamente.');
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-teal-600"></div>
+      </div>
+    );
   }
-
-  console.log(posts);
 
   return (
     <div className="min-h-screen bg-white dark:bg-slate-950">
@@ -108,6 +144,9 @@ export default async function Home() {
                             <Clock className="h-4 w-4" />
                             <span>{post.readTime}</span>
                           </div>
+                          <div className="flex items-center gap-1">
+                            <span>por {post.author}</span>
+                          </div>
                         </div>
 
                         <CardTitle className="text-2xl font-semibold mb-4 text-slate-900 dark:text-white group-hover:text-teal-600 dark:group-hover:text-teal-400 transition-colors">
@@ -138,12 +177,25 @@ export default async function Home() {
                             </Badge>
                           )}
                         </div>
-                        <Link href={`/post/${post.id}`}>
-                          <button className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors group">
-                            Read more
-                            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
-                          </button>
-                        </Link>
+                        
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeletePost(post.id, post.title)}
+                            className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                          >
+                            <Trash2 className="h-3 w-3 mr-1" />
+                            Excluir
+                          </Button>
+                          
+                          <Link href={`/post/${post.id}`}>
+                            <button className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors group">
+                              Read more
+                              <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-1" />
+                            </button>
+                          </Link>
+                        </div>
                       </div>
                     </CardContent>
                   </div>
