@@ -8,7 +8,7 @@ import {
   CardDescription,
   CardTitle,
 } from "@/components/ui/card";
-import { CalendarDays, Clock, ArrowRight, Plus, Trash2 } from "lucide-react";
+import { CalendarDays, Clock, ArrowRight, Plus, Trash2, Edit } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { PostService } from "@/services/post.service";
@@ -40,7 +40,7 @@ export default function Home() {
         const formattedPosts = supabasePosts.map(PostService.formatPostForApp);
         setPosts(formattedPosts);
       } catch (error) {
-        console.error('Erro ao carregar posts:', error);
+        console.error("Erro ao carregar posts:", error);
         setPosts([]);
       } finally {
         setIsLoading(false);
@@ -58,10 +58,10 @@ export default function Home() {
     try {
       await PostService.deletePost(postId);
       // Remove o post da lista local
-      setPosts(prevPosts => prevPosts.filter(post => post.id !== postId));
+      setPosts((prevPosts) => prevPosts.filter((post) => post.id !== postId));
     } catch (error) {
-      console.error('Erro ao excluir post:', error);
-      alert('Erro ao excluir o post. Tente novamente.');
+      console.error("Erro ao excluir post:", error);
+      alert("Erro ao excluir o post. Tente novamente.");
     }
   };
 
@@ -161,7 +161,7 @@ export default function Home() {
                       <div className="flex items-center justify-between">
                         <div className="flex flex-wrap gap-1">
                           {post.tags.slice(0, 2).map((tag) => (
-                            <Badge 
+                            <Badge
                               key={tag}
                               className="bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 hover:bg-teal-200 dark:hover:bg-teal-900/50 text-xs"
                             >
@@ -169,26 +169,36 @@ export default function Home() {
                             </Badge>
                           ))}
                           {post.tags.length > 2 && (
-                            <Badge 
-                              variant="outline"
-                              className="text-xs"
-                            >
+                            <Badge variant="outline" className="text-xs">
                               +{post.tags.length - 2}
                             </Badge>
                           )}
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleDeletePost(post.id, post.title)}
+                            onClick={() =>
+                              handleDeletePost(post.id, post.title)
+                            }
                             className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
                           >
                             <Trash2 className="h-3 w-3 mr-1" />
                             Excluir
                           </Button>
-                          
+
+                          <Link href={`/post/${post.id}/edit`}>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                            >
+                              <Edit className="h-3 w-3 mr-1" />
+                              Editar
+                            </Button>
+                          </Link>
+
                           <Link href={`/post/${post.id}`}>
                             <button className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors group">
                               Read more
