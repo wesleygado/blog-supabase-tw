@@ -1,32 +1,34 @@
 "use client";
 
-import { useState } from "react";
+import { ChangeEvent, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, X, Save } from "lucide-react";
+import { ArrowLeft, X, Save, Target } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PostService } from "@/services/post.service";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/supabase-client";
 
 export default function NewPostPage() {
   const router = useRouter();
   const { user } = useAuth();
-  
+
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [error, setError] = useState<string | null>(null);
-  
+  const [postImage, setPostImage] = useState<File | null>(null);
+
   const [formData, setFormData] = useState({
     title: "",
     content: "",
     url_image: "",
     read_time: "",
-    full_content: ""
+    full_content: "",
   });
 
   // Redirecionar se não estiver logado
@@ -47,23 +49,31 @@ export default function NewPostPage() {
     );
   }
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      setPostImage(e.target.files[0]);
+    }
+  };
+
+  const handleInputChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
     const { name, value } = e.target;
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      [name]: value
+      [name]: value,
     }));
   };
 
   const addTag = () => {
     if (tagInput.trim() && !tags.includes(tagInput.trim())) {
-      setTags(prev => [...prev, tagInput.trim()]);
+      setTags((prev) => [...prev, tagInput.trim()]);
       setTagInput("");
     }
   };
 
   const removeTag = (tagToRemove: string) => {
-    setTags(prev => prev.filter(tag => tag !== tagToRemove));
+    setTags((prev) => prev.filter((tag) => tag !== tagToRemove));
   };
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
@@ -73,20 +83,44 @@ export default function NewPostPage() {
     }
   };
 
+  const uploadImage = async (file: File): Promise<string | null> => {
+    const filePath = `${file.name}-${Date.now()}`;
+
+    const { error } = await supabase.storage
+      .from("posts-images")
+      .upload(filePath, file);
+
+    if (error) {
+      console.error("Error uploading image: " + error);
+      return null;
+    }
+
+    const { data } = await supabase.storage
+      .from("posts-images").getPublicUrl(filePath);
+
+    return data.publicUrl;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
+
+    let urlImage: string | null = null;
+
+    if (postImage) {
+      urlImage = await uploadImage(postImage);
+    }
 
     try {
       // Criar post no Supabase (o autor será automaticamente o usuário logado)
       await PostService.createPost({
         title: formData.title,
         content: formData.content,
-        url_image: formData.url_image,
+        url_image: urlImage,
         read_time: formData.read_time,
         tags: tags,
-        full_content: formData.full_content
+        full_content: formData.full_content,
       });
 
       // Redirecionar para a home após sucesso
@@ -106,7 +140,7 @@ export default function NewPostPage() {
       <header className="border-b border-slate-200 dark:border-slate-800">
         <div className="container mx-auto px-6 py-6">
           <div className="max-w-4xl mx-auto">
-            <Link 
+            <Link
               href="/"
               className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors mb-6"
             >
@@ -145,7 +179,10 @@ export default function NewPostPage() {
               <form onSubmit={handleSubmit} className="space-y-6">
                 {/* Título */}
                 <div className="space-y-2">
-                  <label htmlFor="title" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label
+                    htmlFor="title"
+                    className="text-sm font-medium text-slate-900 dark:text-white"
+                  >
                     Título do post *
                   </label>
                   <Input
@@ -161,7 +198,10 @@ export default function NewPostPage() {
 
                 {/* Descrição curta */}
                 <div className="space-y-2">
-                  <label htmlFor="content" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label
+                    htmlFor="content"
+                    className="text-sm font-medium text-slate-900 dark:text-white"
+                  >
                     Descrição curta *
                   </label>
                   <Textarea
@@ -178,7 +218,10 @@ export default function NewPostPage() {
 
                 {/* Conteúdo completo */}
                 <div className="space-y-2">
-                  <label htmlFor="full_content" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label
+                    htmlFor="full_content"
+                    className="text-sm font-medium text-slate-900 dark:text-white"
+                  >
                     Conteúdo completo (HTML) *
                   </label>
                   <Textarea
@@ -192,12 +235,27 @@ export default function NewPostPage() {
                     className="border-slate-200 dark:border-slate-700 font-mono text-sm"
                   />
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Você pode usar HTML para formatar o conteúdo: &lt;h2&gt;, &lt;h3&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;, &lt;strong&gt;, &lt;code&gt;, &lt;pre&gt;
+                    Você pode usar HTML para formatar o conteúdo: &lt;h2&gt;,
+                    &lt;h3&gt;, &lt;p&gt;, &lt;ul&gt;, &lt;li&gt;,
+                    &lt;strong&gt;, &lt;code&gt;, &lt;pre&gt;
                   </p>
                 </div>
 
                 {/* URL da imagem */}
                 <div className="space-y-2">
+                  <label
+                    htmlFor="upload_image"
+                    className="text-sm font-medium text-slate-900 dark:text-white"
+                  >
+                    Upload da imagem *
+                  </label>
+                  <Input
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileChange}
+                  />
+                </div>
+                {/* <div className="space-y-2">
                   <label htmlFor="url_image" className="text-sm font-medium text-slate-900 dark:text-white">
                     URL da imagem *
                   </label>
@@ -211,11 +269,14 @@ export default function NewPostPage() {
                     required
                     className="border-slate-200 dark:border-slate-700"
                   />
-                </div>
+                </div> */}
 
                 {/* Tempo de leitura */}
                 <div className="space-y-2">
-                  <label htmlFor="read_time" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label
+                    htmlFor="read_time"
+                    className="text-sm font-medium text-slate-900 dark:text-white"
+                  >
                     Tempo de leitura *
                   </label>
                   <Input
@@ -231,7 +292,10 @@ export default function NewPostPage() {
 
                 {/* Tags */}
                 <div className="space-y-2">
-                  <label htmlFor="tags" className="text-sm font-medium text-slate-900 dark:text-white">
+                  <label
+                    htmlFor="tags"
+                    className="text-sm font-medium text-slate-900 dark:text-white"
+                  >
                     Tags
                   </label>
                   <div className="flex gap-2">
@@ -243,8 +307,8 @@ export default function NewPostPage() {
                       placeholder="Digite uma tag e pressione Enter"
                       className="border-slate-200 dark:border-slate-700"
                     />
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       onClick={addTag}
                       variant="outline"
                       className="border-slate-200 dark:border-slate-700"
@@ -252,11 +316,11 @@ export default function NewPostPage() {
                       Adicionar
                     </Button>
                   </div>
-                  
+
                   {tags.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-3">
                       {tags.map((tag, index) => (
-                        <Badge 
+                        <Badge
                           key={index}
                           className="bg-teal-100 text-teal-800 dark:bg-teal-900/30 dark:text-teal-300 pr-1"
                         >
@@ -277,16 +341,16 @@ export default function NewPostPage() {
                 {/* Botões */}
                 <div className="flex items-center justify-end gap-4 pt-6 border-t border-slate-200 dark:border-slate-700">
                   <Link href="/">
-                    <Button 
-                      type="button" 
+                    <Button
+                      type="button"
                       variant="outline"
                       className="border-slate-200 dark:border-slate-700"
                     >
                       Cancelar
                     </Button>
                   </Link>
-                  <Button 
-                    type="submit" 
+                  <Button
+                    type="submit"
                     disabled={isLoading}
                     className="bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50"
                   >

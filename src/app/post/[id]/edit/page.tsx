@@ -1,17 +1,18 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, ChangeEvent } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { ArrowLeft, X, Save } from "lucide-react";
+import { ArrowLeft, X, Save, Upload, Eye } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { PostService } from "@/services/post.service";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/supabase-client";
+import Image from "next/image";
 
 export default function EditPost() {
   const router = useRouter();
@@ -25,6 +26,9 @@ export default function EditPost() {
   const [tagInput, setTagInput] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [post, setPost] = useState<any>(null);
+  const [postImage, setPostImage] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string>("");
+  const [keepCurrentImage, setKeepCurrentImage] = useState(true);
   
   const [formData, setFormData] = useState({
     title: "",
@@ -62,6 +66,8 @@ export default function EditPost() {
           full_content: postData.full_content
         });
 
+        // Definir preview da imagem atual
+        setImagePreview(postData.url_image);
         setTags(postData.tags || []);
 
       } catch (error) {
@@ -79,6 +85,21 @@ export default function EditPost() {
       setIsLoadingPost(false);
     }
   }, [postId, user]);
+
+  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files.length > 0) {
+      const file = e.target.files[0];
+      setPostImage(file);
+      setKeepCurrentImage(false);
+      
+      // Criar preview da nova imagem
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        setImagePreview(e.target?.result as string);
+      };
+      reader.readAsDataURL(file);
+    }
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -106,17 +127,54 @@ export default function EditPost() {
     }
   };
 
+  const uploadImage = async (file: File): Promise<string | null> => {
+    const filePath = `${file.name}-${Date.now()}`;
+
+    const { error } = await supabase.storage
+      .from("posts-images")
+      .upload(filePath, file);
+
+    if (error) {
+      console.error("Error uploading image: " + error);
+      return null;
+    }
+
+    const { data } = await supabase.storage
+      .from("posts-images")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  };
+
+  const resetImageToOriginal = () => {
+    setPostImage(null);
+    setKeepCurrentImage(true);
+    setImagePreview(formData.url_image);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
 
     try {
-      // Atualizar post no Supabase (não precisa passar autor - mantém o mesmo)
+      let urlImage: string | null = formData.url_image; // Manter imagem atual por padrão
+
+      // Se selecionou uma nova imagem, fazer upload
+      if (postImage && !keepCurrentImage) {
+        const uploadedImageUrl = await uploadImage(postImage);
+        if (uploadedImageUrl) {
+          urlImage = uploadedImageUrl;
+        } else {
+          throw new Error('Erro ao fazer upload da imagem');
+        }
+      }
+
+      // Atualizar post no Supabase
       await PostService.updatePost(postId, {
         title: formData.title,
         content: formData.content,
-        url_image: formData.url_image,
+        url_image: urlImage,
         read_time: formData.read_time,
         tags: tags,
         full_content: formData.full_content
@@ -260,21 +318,88 @@ export default function EditPost() {
                   </p>
                 </div>
 
-                {/* URL da imagem */}
-                <div className="space-y-2">
-                  <label htmlFor="url_image" className="text-sm font-medium text-slate-900 dark:text-white">
-                    URL da imagem *
+                {/* Imagem do post */}
+                <div className="space-y-4">
+                  <label className="text-sm font-medium text-slate-900 dark:text-white">
+                    Imagem do post *
                   </label>
-                  <Input
-                    id="url_image"
-                    name="url_image"
-                    type="url"
-                    value={formData.url_image}
-                    onChange={handleInputChange}
-                    placeholder="https://images.unsplash.com/..."
-                    required
-                    className="border-slate-200 dark:border-slate-700"
-                  />
+                  
+                  {/* Preview da imagem atual */}
+                  {imagePreview && (
+                    <div className="relative w-full h-48 rounded-lg overflow-hidden border border-slate-200 dark:border-slate-700">
+                      <Image
+                        src={imagePreview}
+                        alt="Preview"
+                        fill
+                        className="object-cover"
+                      />
+                      <div className="absolute top-2 right-2 bg-black bg-opacity-50 rounded-full p-1">
+                        <Eye className="h-4 w-4 text-white" />
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Opções de imagem */}
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-4">
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="imageOption"
+                          checked={keepCurrentImage}
+                          onChange={() => {
+                            setKeepCurrentImage(true);
+                            setPostImage(null);
+                            setImagePreview(formData.url_image);
+                          }}
+                          className="text-teal-600"
+                        />
+                        <span className="text-sm text-slate-700 dark:text-slate-300">
+                          Manter imagem atual
+                        </span>
+                      </label>
+
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="radio"
+                          name="imageOption"
+                          checked={!keepCurrentImage}
+                          onChange={() => setKeepCurrentImage(false)}
+                          className="text-teal-600"
+                        />
+                        <span className="text-sm text-slate-700 dark:text-slate-300">
+                          Trocar imagem
+                        </span>
+                      </label>
+                    </div>
+
+                    {/* Upload de nova imagem */}
+                    {!keepCurrentImage && (
+                      <div className="space-y-2">
+                        <Input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleFileChange}
+                          className="border-slate-200 dark:border-slate-700"
+                        />
+                        {postImage && (
+                          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+                            <Upload className="h-4 w-4" />
+                            <span>Nova imagem selecionada: {postImage.name}</span>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={resetImageToOriginal}
+                              className="ml-auto border-slate-200 dark:border-slate-700"
+                            >
+                              Cancelar
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Tempo de leitura */}

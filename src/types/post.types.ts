@@ -20,7 +20,7 @@ export interface Post {
 export interface PostInsert {
   title: string;
   content: string;
-  url_image: string;
+  url_image: string | null;
   author: string; // UUID como string
   read_time: string;
   tags: string[];
