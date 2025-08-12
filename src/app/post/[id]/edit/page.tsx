@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -10,26 +11,20 @@ import { ArrowLeft, X, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter, useParams } from "next/navigation";
 import { PostService } from "@/services/post.service";
-import { supabase } from "@/supabase-client";
-
-interface User {
-  id: string;
-  name: string;
-  email: string;
-}
+import { useAuth } from "@/contexts/AuthContext";
 
 export default function EditPost() {
   const router = useRouter();
   const params = useParams();
   const postId = params.id as string;
+  const { user } = useAuth();
   
   const [isLoading, setIsLoading] = useState(false);
   const [isLoadingPost, setIsLoadingPost] = useState(true);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [post, setPost] = useState<any>(null);
   
   const [formData, setFormData] = useState({
     title: "",
@@ -39,37 +34,35 @@ export default function EditPost() {
     full_content: ""
   });
 
-  // Carregar dados do post e usuários ao montar o componente
+  // Carregar dados do post
   useEffect(() => {
     const loadData = async () => {
       try {
-        // Carregar usuários
-        const { data: usersData, error: usersError } = await supabase
-          .from('usuarios')
-          .select('id, name, email')
-          .order('name');
-
-        if (usersError) throw usersError;
-        setUsers(usersData || []);
-
         // Carregar dados do post
-        const post = await PostService.getPostById(postId);
-        if (!post) {
+        const postData = await PostService.getPostById(postId);
+        if (!postData) {
           setError('Post não encontrado');
+          return;
+        }
+
+        setPost(postData);
+
+        // Verificar se o usuário é o autor do post
+        if (user && postData.author !== user.id) {
+          setError('Você não tem permissão para editar este post');
           return;
         }
 
         // Preencher formulário com dados do post
         setFormData({
-          title: post.title,
-          content: post.content,
-          url_image: post.url_image,
-          read_time: post.read_time,
-          full_content: post.full_content
+          title: postData.title,
+          content: postData.content,
+          url_image: postData.url_image,
+          read_time: postData.read_time,
+          full_content: postData.full_content
         });
 
-        setTags(post.tags || []);
-        setSelectedUserId(post.author); // ID do autor atual
+        setTags(postData.tags || []);
 
       } catch (error) {
         console.error('Erro ao carregar dados:', error);
@@ -79,10 +72,13 @@ export default function EditPost() {
       }
     };
 
-    if (postId) {
+    if (postId && user) {
       loadData();
+    } else if (!user) {
+      setError('Você precisa estar logado para editar posts');
+      setIsLoadingPost(false);
     }
-  }, [postId]);
+  }, [postId, user]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -116,16 +112,11 @@ export default function EditPost() {
     setError(null);
 
     try {
-      if (!selectedUserId) {
-        throw new Error('Selecione um autor');
-      }
-
-      // Atualizar post no Supabase
+      // Atualizar post no Supabase (não precisa passar autor - mantém o mesmo)
       await PostService.updatePost(postId, {
         title: formData.title,
         content: formData.content,
         url_image: formData.url_image,
-        author: selectedUserId,
         read_time: formData.read_time,
         tags: tags,
         full_content: formData.full_content
@@ -149,14 +140,23 @@ export default function EditPost() {
     );
   }
 
-  if (error && isLoadingPost) {
+  if (error) {
     return (
       <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
         <div className="text-center">
           <p className="text-red-600 dark:text-red-400 mb-4">{error}</p>
-          <Link href="/">
-            <Button>Voltar ao blog</Button>
-          </Link>
+          <div className="space-x-4">
+            <Link href="/">
+              <Button>Voltar ao blog</Button>
+            </Link>
+            {error.includes('logado') && (
+              <Link href="/auth/login">
+                <Button className="bg-teal-600 hover:bg-teal-700 text-white">
+                  Fazer Login
+                </Button>
+              </Link>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -190,6 +190,13 @@ export default function EditPost() {
               <p className="text-slate-600 dark:text-slate-400">
                 Atualize as informações do seu post
               </p>
+              {post && (
+                <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                  <p className="text-sm text-blue-600 dark:text-blue-400">
+                    📝 Editando como: <strong>{user?.email}</strong>
+                  </p>
+                </div>
+              )}
             </CardHeader>
 
             <CardContent>
@@ -270,43 +277,20 @@ export default function EditPost() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Autor */}
-                  <div className="space-y-2">
-                    <label htmlFor="author" className="text-sm font-medium text-slate-900 dark:text-white">
-                      Autor *
-                    </label>
-                    <select
-                      id="author"
-                      value={selectedUserId}
-                      onChange={(e) => setSelectedUserId(e.target.value)}
-                      required
-                      className="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 dark:placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 dark:focus-visible:ring-slate-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="">Selecione um autor</option>
-                      {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.name} ({user.email})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Tempo de leitura */}
-                  <div className="space-y-2">
-                    <label htmlFor="read_time" className="text-sm font-medium text-slate-900 dark:text-white">
-                      Tempo de leitura *
-                    </label>
-                    <Input
-                      id="read_time"
-                      name="read_time"
-                      value={formData.read_time}
-                      onChange={handleInputChange}
-                      placeholder="5 min read"
-                      required
-                      className="border-slate-200 dark:border-slate-700"
-                    />
-                  </div>
+                {/* Tempo de leitura */}
+                <div className="space-y-2">
+                  <label htmlFor="read_time" className="text-sm font-medium text-slate-900 dark:text-white">
+                    Tempo de leitura *
+                  </label>
+                  <Input
+                    id="read_time"
+                    name="read_time"
+                    value={formData.read_time}
+                    onChange={handleInputChange}
+                    placeholder="5 min read"
+                    required
+                    className="border-slate-200 dark:border-slate-700"
+                  />
                 </div>
 
                 {/* Tags */}
@@ -367,7 +351,7 @@ export default function EditPost() {
                   </Link>
                   <Button 
                     type="submit" 
-                    disabled={isLoading || !selectedUserId}
+                    disabled={isLoading}
                     className="bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50"
                   >
                     {isLoading ? (

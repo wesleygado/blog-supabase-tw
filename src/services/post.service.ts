@@ -1,11 +1,19 @@
-import { supabase } from "../supabase-client";
-import { Post, PostInsert } from "../types/post.types";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+import { supabase } from "@/supabase-client";
+import { Post, PostInsert } from "@/types/post.types";
 
 export class PostService {
   static async getAllPosts(): Promise<Post[]> {
     const { data, error } = await supabase
       .from("posts")
-      .select("*")
+      .select(`
+        *,
+        usuarios:author (
+          id,
+          name,
+          email
+        )
+      `)
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -19,16 +27,14 @@ export class PostService {
   static async getPostById(id: string): Promise<Post | null> {
     const { data, error } = await supabase
       .from("posts")
-      .select(
-        `
-      *,
-      usuarios:author (
-        id,
-        name,
-        email
-      )
-    `
-      )
+      .select(`
+        *,
+        usuarios:author (
+          id,
+          name,
+          email
+        )
+      `)
       .eq("id", id)
       .single();
 
@@ -43,11 +49,27 @@ export class PostService {
     return data;
   }
 
-  static async createPost(post: PostInsert): Promise<Post> {
+  static async createPost(post: Omit<PostInsert, 'author'>): Promise<Post> {
+    // Verificar se usuário está autenticado
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) {
+      throw new Error('Usuário não autenticado');
+    }
+
     const { data, error } = await supabase
       .from("posts")
-      .insert([post])
-      .select()
+      .insert([{
+        ...post,
+        author: user.id // UUID do usuário autenticado
+      }])
+      .select(`
+        *,
+        usuarios:author (
+          id,
+          name,
+          email
+        )
+      `)
       .single();
 
     if (error) {
@@ -58,15 +80,23 @@ export class PostService {
     return data;
   }
 
-  static async updatePost(
-    id: string,
-    post: Partial<PostInsert>
-  ): Promise<Post> {
+  // ✅ MÉTODO UPDATEPOST QUE ESTAVA FALTANDO
+  static async updatePost(id: string, post: Partial<PostInsert>): Promise<Post> {
     const { data, error } = await supabase
       .from("posts")
-      .update({ ...post, updated_at: new Date().toISOString() })
+      .update({ 
+        ...post, 
+        updated_at: new Date().toISOString() 
+      })
       .eq("id", id)
-      .select()
+      .select(`
+        *,
+        usuarios:author (
+          id,
+          name,
+          email
+        )
+      `)
       .single();
 
     if (error) {
@@ -87,23 +117,21 @@ export class PostService {
   }
 
   // Função helper para formatar dados do Supabase para o formato da aplicação
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   static formatPostForApp(post: any) {
     return {
       id: post.id,
       title: post.title,
       content: post.content,
       urlImage: post.url_image,
-      author: post.author, // Fallback para o campo antigo
-      publishedAt: new Date(post.published_at).toLocaleDateString("en-US", {
+      author: post.usuarios?.name || 'Autor desconhecido',
+      publishedAt: new Date(post.published_at).toLocaleDateString("pt-BR", {
+        day: "2-digit",
         month: "short",
-        day: "numeric",
-        year: "numeric",
+        year: "numeric"
       }),
       readTime: post.read_time,
       tags: post.tags,
       fullContent: post.full_content,
-      usuarios: post.usuarios
     };
   }
 }

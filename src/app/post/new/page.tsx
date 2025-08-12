@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -10,22 +10,16 @@ import { ArrowLeft, X, Save } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { PostService } from "@/services/post.service";
-import { supabase } from "@/supabase-client";
+import { useAuth } from "@/contexts/AuthContext";
 
-interface User {
-  id: string;
-  name: string;
-  email: string;
-}
-
-export default function CreatePost() {
+export default function NewPostPage() {
   const router = useRouter();
+  const { user } = useAuth();
+  
   const [isLoading, setIsLoading] = useState(false);
   const [tags, setTags] = useState<string[]>([]);
   const [tagInput, setTagInput] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [users, setUsers] = useState<User[]>([]);
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
   
   const [formData, setFormData] = useState({
     title: "",
@@ -35,32 +29,23 @@ export default function CreatePost() {
     full_content: ""
   });
 
-  // Carregar usuários ao montar o componente
-  useEffect(() => {
-    const loadUsers = async () => {
-      try {
-        const { data, error } = await supabase
-          .from('usuarios')
-          .select('id, name, email')
-          .order('name');
-
-        if (error) throw error;
-
-        setUsers(data || []);
-        
-        // Selecionar primeiro usuário por padrão (ou Wesley Dev se existir)
-        if (data && data.length > 0) {
-          const wesleyUser = data.find(user => user.name.toLowerCase().includes('wesley'));
-          setSelectedUserId(wesleyUser?.id || data[0].id);
-        }
-      } catch (error) {
-        console.error('Erro ao carregar usuários:', error);
-        setError('Erro ao carregar usuários');
-      }
-    };
-
-    loadUsers();
-  }, []);
+  // Redirecionar se não estiver logado
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-white dark:bg-slate-950 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-slate-600 dark:text-slate-400 mb-4">
+            Você precisa estar logado para criar posts.
+          </p>
+          <Link href="/auth/login">
+            <Button className="bg-teal-600 hover:bg-teal-700 text-white">
+              Fazer Login
+            </Button>
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
@@ -94,16 +79,11 @@ export default function CreatePost() {
     setError(null);
 
     try {
-      if (!selectedUserId) {
-        throw new Error('Selecione um autor');
-      }
-
-      // Criar post no Supabase
+      // Criar post no Supabase (o autor será automaticamente o usuário logado)
       await PostService.createPost({
         title: formData.title,
         content: formData.content,
         url_image: formData.url_image,
-        author: selectedUserId, // UUID do usuário selecionado
         read_time: formData.read_time,
         tags: tags,
         full_content: formData.full_content
@@ -111,7 +91,7 @@ export default function CreatePost() {
 
       // Redirecionar para a home após sucesso
       router.push("/");
-      router.refresh(); // Force refresh to show new post
+      router.refresh();
     } catch (error) {
       console.error("Erro ao criar post:", error);
       setError("Erro ao criar o post. Tente novamente.");
@@ -148,6 +128,11 @@ export default function CreatePost() {
               <p className="text-slate-600 dark:text-slate-400">
                 Compartilhe seus conhecimentos e insights com a comunidade
               </p>
+              <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg">
+                <p className="text-sm text-blue-600 dark:text-blue-400">
+                  📝 Criando como: <strong>{user.email}</strong>
+                </p>
+              </div>
             </CardHeader>
 
             <CardContent>
@@ -228,43 +213,20 @@ export default function CreatePost() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  {/* Autor */}
-                  <div className="space-y-2">
-                    <label htmlFor="author" className="text-sm font-medium text-slate-900 dark:text-white">
-                      Autor *
-                    </label>
-                    <select
-                      id="author"
-                      value={selectedUserId}
-                      onChange={(e) => setSelectedUserId(e.target.value)}
-                      required
-                      className="flex h-10 w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-950 px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-slate-500 dark:placeholder:text-slate-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-950 dark:focus-visible:ring-slate-300 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="">Selecione um autor</option>
-                      {users.map((user) => (
-                        <option key={user.id} value={user.id}>
-                          {user.name} ({user.email})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {/* Tempo de leitura */}
-                  <div className="space-y-2">
-                    <label htmlFor="read_time" className="text-sm font-medium text-slate-900 dark:text-white">
-                      Tempo de leitura *
-                    </label>
-                    <Input
-                      id="read_time"
-                      name="read_time"
-                      value={formData.read_time}
-                      onChange={handleInputChange}
-                      placeholder="5 min read"
-                      required
-                      className="border-slate-200 dark:border-slate-700"
-                    />
-                  </div>
+                {/* Tempo de leitura */}
+                <div className="space-y-2">
+                  <label htmlFor="read_time" className="text-sm font-medium text-slate-900 dark:text-white">
+                    Tempo de leitura *
+                  </label>
+                  <Input
+                    id="read_time"
+                    name="read_time"
+                    value={formData.read_time}
+                    onChange={handleInputChange}
+                    placeholder="5 min read"
+                    required
+                    className="border-slate-200 dark:border-slate-700"
+                  />
                 </div>
 
                 {/* Tags */}
@@ -325,7 +287,7 @@ export default function CreatePost() {
                   </Link>
                   <Button 
                     type="submit" 
-                    disabled={isLoading || !selectedUserId}
+                    disabled={isLoading}
                     className="bg-teal-600 hover:bg-teal-700 text-white disabled:opacity-50"
                   >
                     {isLoading ? (

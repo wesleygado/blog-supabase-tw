@@ -1,6 +1,6 @@
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { CalendarDays, Clock, ArrowLeft, Share } from "lucide-react";
+import { CalendarDays, Clock, ArrowLeft, Share, Edit, Trash2 } from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { notFound } from "next/navigation";
@@ -14,18 +14,18 @@ export default async function PostPage({ params }: PageProps) {
   const { id } = await params;
   
   let post;
+  let rawPost; // Manter dados brutos para verificações
   
   try {
     // Buscar o post pelo ID no Supabase
-    const supabasePost = await PostService.getPostById(id);
+    rawPost = await PostService.getPostById(id);
     
-    console.log(supabasePost)
-    if (!supabasePost) {
+    if (!rawPost) {
       notFound();
     }
     
     // Formatar o post para o formato da aplicação
-    post = PostService.formatPostForApp(supabasePost);
+    post = PostService.formatPostForApp(rawPost);
   } catch (error) {
     console.error('Erro ao carregar post:', error);
     notFound();
@@ -42,7 +42,7 @@ export default async function PostPage({ params }: PageProps) {
               className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors mb-6"
             >
               <ArrowLeft className="h-4 w-4" />
-              Back to Blog
+              Voltar ao Blog
             </Link>
           </div>
         </div>
@@ -86,7 +86,7 @@ export default async function PostPage({ params }: PageProps) {
                   <div className="w-8 h-8 bg-teal-600 rounded-full flex items-center justify-center text-white text-sm font-semibold">
                     {post.author?.charAt(0)}
                   </div>
-                  <span>{post.usuarios.name}</span>
+                  <span>{post.author}</span> {/* ✅ Corrigido: usar post.author em vez de post.usuarios.name */}
                 </div>
                 <div className="flex items-center gap-1">
                   <CalendarDays className="h-4 w-4" />
@@ -98,14 +98,17 @@ export default async function PostPage({ params }: PageProps) {
                 </div>
               </div>
 
-              <Button 
-                variant="outline" 
-                size="sm"
-                className="border-slate-200 dark:border-slate-700 hover:bg-teal-50 dark:hover:bg-teal-900/20"
-              >
-                <Share className="h-4 w-4 mr-2" />
-                Share
-              </Button>
+              <div className="flex items-center gap-2">
+                {/* Botões de editar/excluir se for uma página client-side */}
+                <Button 
+                  variant="outline" 
+                  size="sm"
+                  className="border-slate-200 dark:border-slate-700 hover:bg-teal-50 dark:hover:bg-teal-900/20"
+                >
+                  <Share className="h-4 w-4 mr-2" />
+                  Compartilhar
+                </Button>
+              </div>
             </div>
           </header>
 
@@ -146,7 +149,7 @@ export default async function PostPage({ params }: PageProps) {
                 className="border-slate-200 dark:border-slate-700 hover:bg-teal-50 dark:hover:bg-teal-900/20"
               >
                 <Share className="h-4 w-4 mr-2" />
-                Share this post
+                Compartilhar post
               </Button>
             </div>
           </footer>

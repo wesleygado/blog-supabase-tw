@@ -13,7 +13,8 @@ import Image from "next/image";
 import Link from "next/link";
 import { PostService } from "@/services/post.service";
 import { useState, useEffect } from "react";
-import { useRouter } from "next/navigation";
+import UserMenu from "@/components/UserMenu";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface FormattedPost {
   id: string;
@@ -30,7 +31,7 @@ interface FormattedPost {
 export default function Home() {
   const [posts, setPosts] = useState<FormattedPost[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
+  const { user } = useAuth();
 
   // Carregar posts ao montar o componente
   useEffect(() => {
@@ -51,6 +52,11 @@ export default function Home() {
   }, []);
 
   const handleDeletePost = async (postId: string, postTitle: string) => {
+    if (!user) {
+      alert("Você precisa estar logado para excluir posts.");
+      return;
+    }
+
     if (!confirm(`Tem certeza que deseja excluir o post "${postTitle}"?`)) {
       return;
     }
@@ -88,12 +94,7 @@ export default function Home() {
                   Insights and tutorials for modern web development
                 </p>
               </div>
-              <Link href="/post/new">
-                <Button className="bg-teal-600 hover:bg-teal-700 text-white">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Adicionar novo post
-                </Button>
-              </Link>
+              <UserMenu />
             </div>
           </div>
         </div>
@@ -107,12 +108,25 @@ export default function Home() {
               <p className="text-slate-500 dark:text-slate-400 text-lg mb-6">
                 Nenhum post encontrado. Que tal criar o primeiro?
               </p>
-              <Link href="/post/new">
-                <Button className="bg-teal-600 hover:bg-teal-700 text-white">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Criar primeiro post
-                </Button>
-              </Link>
+              {user ? (
+                <Link href="/post/new">
+                  <Button className="bg-teal-600 hover:bg-teal-700 text-white">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Criar primeiro post
+                  </Button>
+                </Link>
+              ) : (
+                <div className="space-y-4">
+                  <p className="text-slate-500 dark:text-slate-400">
+                    Faça login para criar posts.
+                  </p>
+                  <Link href="/auth/login">
+                    <Button className="bg-teal-600 hover:bg-teal-700 text-white">
+                      Fazer Login
+                    </Button>
+                  </Link>
+                </div>
+              )}
             </div>
           ) : (
             <div className="space-y-8">
@@ -176,28 +190,32 @@ export default function Home() {
                         </div>
 
                         <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                              handleDeletePost(post.id, post.title)
-                            }
-                            className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
-                          >
-                            <Trash2 className="h-3 w-3 mr-1" />
-                            Excluir
-                          </Button>
+                          {user && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                  handleDeletePost(post.id, post.title)
+                                }
+                                className="border-red-200 text-red-600 hover:bg-red-50 hover:border-red-300 dark:border-red-800 dark:text-red-400 dark:hover:bg-red-900/20"
+                              >
+                                <Trash2 className="h-3 w-3 mr-1" />
+                                Excluir
+                              </Button>
 
-                          <Link href={`/post/${post.id}/edit`}>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
-                            >
-                              <Edit className="h-3 w-3 mr-1" />
-                              Editar
-                            </Button>
-                          </Link>
+                              <Link href={`/post/${post.id}/edit`}>
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  className="border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 dark:border-blue-800 dark:text-blue-400 dark:hover:bg-blue-900/20"
+                                >
+                                  <Edit className="h-3 w-3 mr-1" />
+                                  Editar
+                                </Button>
+                              </Link>
+                            </>
+                          )}
 
                           <Link href={`/post/${post.id}`}>
                             <button className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 dark:text-teal-400 hover:text-teal-700 dark:hover:text-teal-300 transition-colors group">
