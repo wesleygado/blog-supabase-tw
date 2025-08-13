@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { Badge } from "@/components/ui/badge";
@@ -8,13 +9,21 @@ import {
   CardDescription,
   CardTitle,
 } from "@/components/ui/card";
-import { CalendarDays, Clock, ArrowRight, Plus, Trash2, Edit } from "lucide-react";
+import {
+  CalendarDays,
+  Clock,
+  ArrowRight,
+  Plus,
+  Trash2,
+  Edit,
+} from "lucide-react";
 import Image from "next/image";
 import Link from "next/link";
 import { PostService } from "@/services/post.service";
 import { useState, useEffect } from "react";
 import UserMenu from "@/components/UserMenu";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/supabase-client";
 
 interface FormattedPost {
   id: string;
@@ -50,6 +59,62 @@ export default function Home() {
 
     loadPosts();
   }, []);
+
+  useEffect(() => {
+  const channel = supabase.channel("posts-channel");
+  
+  channel.on(
+    "postgres_changes",
+    { event: "INSERT", schema: "public", table: "posts" },
+    async (payload: any) => {
+      try {
+        // Buscar o post completo com dados do autor
+        const newPostData = await PostService.getPostById(payload.new.id);
+        if (newPostData) {
+          const formattedNewPost = PostService.formatPostForApp(newPostData);
+          setPosts((prev) => [formattedNewPost, ...prev]); // Adicionar no início
+        }
+      } catch (error) {
+        console.error("Erro ao processar novo post:", error);
+      }
+    }
+  );
+
+  channel.on(
+    "postgres_changes",
+    { event: "UPDATE", schema: "public", table: "posts" },
+    async (payload: any) => {
+      try {
+        // Buscar o post atualizado com dados do autor
+        const updatedPostData = await PostService.getPostById(payload.new.id);
+        if (updatedPostData) {
+          const formattedUpdatedPost = PostService.formatPostForApp(updatedPostData);
+          setPosts((prev) => 
+            prev.map(post => 
+              post.id === payload.new.id ? formattedUpdatedPost : post
+            )
+          );
+        }
+      } catch (error) {
+        console.error("Erro ao processar post atualizado:", error);
+      }
+    }
+  );
+
+  channel.on(
+    "postgres_changes",
+    { event: "DELETE", schema: "public", table: "posts" },
+    (payload: any) => {
+      setPosts((prev) => prev.filter(post => post.id !== payload.old.id));
+    }
+  );
+
+  channel.subscribe((status) => console.log("Real-time status:", status));
+
+  return () => {
+    supabase.removeChannel(channel);
+  };
+}, []);
 
   const handleDeletePost = async (postId: string, postTitle: string) => {
     if (!user) {
