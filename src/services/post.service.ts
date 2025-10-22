@@ -6,14 +6,16 @@ export class PostService {
   static async getAllPosts(): Promise<Post[]> {
     const { data, error } = await supabase
       .from("posts")
-      .select(`
+      .select(
+        `
         *,
         usuarios:author (
           id,
           name,
           email
         )
-      `)
+      `,
+      )
       .order("created_at", { ascending: false });
 
     if (error) {
@@ -27,14 +29,16 @@ export class PostService {
   static async getPostById(id: string): Promise<Post | null> {
     const { data, error } = await supabase
       .from("posts")
-      .select(`
+      .select(
+        `
         *,
         usuarios:author (
           id,
           name,
           email
         )
-      `)
+      `,
+      )
       .eq("id", id)
       .single();
 
@@ -49,27 +53,33 @@ export class PostService {
     return data;
   }
 
-  static async createPost(post: Omit<PostInsert, 'author'>): Promise<Post> {
+  static async createPost(post: Omit<PostInsert, "author">): Promise<Post> {
     // Verificar se usuário está autenticado
-    const { data: { user } } = await supabase.auth.getUser();
+    const {
+      data: { user },
+    } = await supabase.auth.getUser();
     if (!user) {
-      throw new Error('Usuário não autenticado');
+      throw new Error("Usuário não autenticado");
     }
 
     const { data, error } = await supabase
       .from("posts")
-      .insert([{
-        ...post,
-        author: user.id // UUID do usuário autenticado
-      }])
-      .select(`
+      .insert([
+        {
+          ...post,
+          author: user.id, // UUID do usuário autenticado
+        },
+      ])
+      .select(
+        `
         *,
         usuarios:author (
           id,
           name,
           email
         )
-      `)
+      `,
+      )
       .single();
 
     if (error) {
@@ -80,23 +90,27 @@ export class PostService {
     return data;
   }
 
-  // ✅ MÉTODO UPDATEPOST QUE ESTAVA FALTANDO
-  static async updatePost(id: string, post: Partial<PostInsert>): Promise<Post> {
+  static async updatePost(
+    id: string,
+    post: Partial<PostInsert>,
+  ): Promise<Post> {
     const { data, error } = await supabase
       .from("posts")
-      .update({ 
-        ...post, 
-        updated_at: new Date().toISOString() 
+      .update({
+        ...post,
+        updated_at: new Date().toISOString(),
       })
       .eq("id", id)
-      .select(`
+      .select(
+        `
         *,
         usuarios:author (
           id,
           name,
           email
         )
-      `)
+      `,
+      )
       .single();
 
     if (error) {
@@ -123,11 +137,11 @@ export class PostService {
       title: post.title,
       content: post.content,
       urlImage: post.url_image,
-      author: post.usuarios?.name || 'Autor desconhecido',
+      author: post.usuarios?.name || "Autor desconhecido",
       publishedAt: new Date(post.published_at).toLocaleDateString("pt-BR", {
         day: "2-digit",
         month: "short",
-        year: "numeric"
+        year: "numeric",
       }),
       readTime: post.read_time,
       tags: post.tags,
